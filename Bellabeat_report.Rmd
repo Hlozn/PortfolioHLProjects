@@ -1,0 +1,198 @@
+---
+title: "Bellabeat Case Study"
+author: "Hugo Lozano"
+date: "09/27/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# The Company 
+Bellabeat, a high-tech company that manufactures health-focused smart products. Designed to inspire women around the world to be healty. Collecting data on activity, sleep, stress, and reproductive health has allowed Bellabeat to empower women with knowledge about their own health and habits. 
+
+# Bussines tasks
+Find and share main people’s behavior using tracking devices. Then, make suggestions about how people can improve their overall health by making small changes in their routine so the marketing department can launch a succesful campaing. 
+
+## Installing the right packages 
+
+```{r packages}
+
+install.packages('tidyverse')
+library(tidyverse)
+install.packages('lubridate')
+library(lubridate)
+install.packages('ggplot2')
+library(ggplot2)
+```
+
+# Import the datasets 
+Then we can upload the [datasets](https://www.kaggle.com/arashnic/fitbit) and prepare them for cleaning and later on the analysis
+
+```{r datasets}
+activity <- read.csv("dailyActivity_merged.csv",TRUE,",")
+calories <- read.csv("dailyCalories_merged.csv",TRUE,",")
+intensities <- read.csv("dailyIntensities_merged.csv",TRUE,",")
+sleep <- read.csv("sleepDay_merged.csv",TRUE,",")
+```
+
+## Head function
+we can see the resume of the files by using the head() function
+
+```{r head() }
+head(activity)
+head(calories)
+head(intensities)
+head(sleep)
+```
+
+
+I made a quick review of the datasets and I found inconsistencies in the date in all datasets so that's where I'm going to focus in the cleaning part
+
+```{r}
+### Activity
+activity$Date <- format(as.POSIXct(activity$ActivityDate, format='%m/%d/%Y'),format='%m/%d/%Y')
+### Calories
+calories$ActivityDay=as.POSIXct(calories$ActivityDay, format="%m/%d/%Y", tz=Sys.timezone())
+calories$date <- format(calories$ActivityDay, format = "%m/%d/%y")
+### intensities
+intensities$ActivityDay<- format(as.POSIXct(intensities$ActivityDay, format='%m/%d/%Y'), format='%m/%d/%Y')
+### sleep
+sleep$Date <- format(as.POSIXct(sleep$SleepDay, format='%m/%d/%Y'),format='%m/%d/%Y')
+
+```
+
+# Analyzing the data
+```{r distincs}
+n_distinct(activity$Id)
+n_distinct(calories$Id)
+n_distinct(intensities$Id)
+n_distinct(sleep$Id)
+```
+As we can see from the previous results, we have enough data, in the sleep dataset we have just enough, so let's perform a summary statistics
+
+# Statistics 
+```{r}
+##activity
+activity %>%
+  select(TotalSteps, TotalDistance, SedentaryMinutes, Calories) %>%
+  summary()
+
+##calories
+calories %>%
+  select(Calories) %>%
+  summary()
+
+##intesities
+intensities %>%
+  select(SedentaryMinutes, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes) %>%
+  summary()
+
+##sleep
+sleep %>%
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>%
+  summary()
+```
+
+
+### I have discovered interesting facts about the data we just analyzed
+1st: From the 33 subjects, the average of steps taken was 7638, while an active person should take above 9000 steps. From this we can recover
+that on average a person spend around 991.2 minutes doing nothing or around 16 hours being sedentary, two thirds of  their day time, and around 22 minutes being very active.
+2nd: Most all of the subjects are lightly active people.
+3rd: The contestants on average sleep on time and around 7 hours per sleep. And spent 7.5 hours in bed. Which is the same as being very sedentary
+
+
+# Suporting my findings with visualizations
+### merging data to see the correlation between the sleep and the activity  
+```{r merge}
+merged_dataset <- merge(sleep, activity, by = c("Id","Date"))
+head(merged_dataset)
+```
+
+# DataViz 
+## calories burnt
+```{r ggplot}
+ggplot(data=activity) + 
+  geom_point(mapping = aes(x=TotalSteps, y=Calories)) + geom_smooth(mapping = aes(x=TotalSteps, y=Calories)) + labs(title= "Total Steps vs Calories", subtitle="Sample of 33 individuals", captions="Data collected by Fitbit")
+
+```
+The graph shown a positive correlation between the more steps are taken the more calories are consumed by the body
+
+## time in bed
+```{r}
+ggplot(data=sleep) +
+  geom_point(mapping = aes(x=TotalMinutesAsleep, y=TotalTimeInBed)) + geom_smooth(mapping = aes(x=TotalMinutesAsleep, y=TotalTimeInBed)) + labs(title= "Minutes Asleep vs Time in bed", subtitle="Sample of 33 individuals", captions="Data collected by Fitbit")
+
+```
+Again another positive correlation between the time spent in bed and the minutes asleep, but we have to remember, correlation doesn't mean causation. We have to look how active are the people.
+
+
+## Daily activiy mean per user
+```{r}
+int_mod_v2 <- read.csv("int_mod_v2.csv",TRUE, ",")
+
+ggplot(data=int_mod_v2) +
+  geom_bar(mapping = aes(x=New_Id, y=mean_int, fill=New_Id), stat = "identity") +
+  theme(axis.text.x = element_text(angle=70)) + labs(title= "Sedentary time (min)", subtitle="Sample of 33 individuals", captions="Data collected by Fitbit")+
+  labs(y="total sedentary time (min)", x = "Subjects")
+
+```
+The 'Id's' were changed to 'sub', due conflicts with the console.
+In this graph we can see that the majority of the subjects spends around 900 minutes in total sedentary 
+
+For more in dept review of the intensities I needed to make a pivot table in excel 
+
+```{r}
+intensities_pivot <- read.csv("intensities_pivot.csv", TRUE, ",")
+head(intensities_pivot)
+```
+
+
+![intensities vs users image](intensities_vs_users.JPG)
+
+
+
+As I stated before, the majority of the users are sedentary people, and just a small percent of them have an active session in their day. 
+
+
+# with the merged data 
+
+
+```{r ggplot merged_dataset}
+ggplot(data = merged_dataset) +
+  geom_point(mapping = aes(x=TotalMinutesAsleep, y=SedentaryMinutes),color="dark blue")+ geom_smooth(mapping = aes(x=TotalMinutesAsleep, y=SedentaryMinutes))+
+  labs(title= "Sedentary vs Asleep (min)", subtitle="Sample of 33 individuals", captions="Data collected by Fitbit") +
+  annotate("text", x= 420, y=250, label="Good amount of sleep", color="gray", fontface="bold")+
+  annotate("pointrange", x = 420, y = 230, ymin = 0, ymax = 1000 ,colour = "orange", size = 1, alpha=0.4)
+ 
+```
+
+
+With the merged_dataset I was  able to retrieve the following information
+Stating that if a person doesn't get full sleep, it will tend to be a sedentary person. On the contrary, if a person sleeps enough, it will be less likely to be sedentary .
+We can see a negative relationship, and describes when two variables tend to move in opposite size and directions from on another.   
+Always a good amount of sleep per time, can be beneficial.
+
+
+
+
+# Final recommendations and comments
+
+We can finally see the potential that BellaBeat has with their customers, improving overall health it's the main goal, and for making possible that goal the following recommendations must be implemented.
+Bellabeat needs implement in their environment reminders that help the customers to develop a good habit by doing some exercise, because we could see that the majority of the users are lightly active person, but form improvement, they need to be fairly
+In studies we can see that people that sleeps around 7.5 hours it's their optimal sleep patter to perform well when studying, their health are good, overall. 
+Another important factor is that this people spend a good amount of time procrastinating. Which is good but when it's due but,
+A sedentary lifestyle has an array of adverse health effects, including elevated all-cause mortality, CVD mortality, cancer risk, risks for metabolic diseases such as DM, HTN, dyslipidemia, and musculoskeletal diseases such as knee pain and osteoporosis. (Korean J Fam Med, 2020)
+
+
+## Recommendations for the BellaBeat app
+
+A good scheme of daily activities and remainders can bring beneficial factors in women life, specially in this times when daily life is moving faster, stress and mental diseases are closer, but with a good motivation and daily goals to achieve women can improve overall health and fight major diseases like the previous mentioned.
+
+* The majority of the study shows that people are sedentary. Bellabeat should encourage women to take a step further and be active or very active to prevent mental diseases.
+
+* A good balance between hours of sleep and procrastination is good, Bellabeat should incorporate in their environment remainders for women to take naps and a sleep schedules for better performance during the day.
+
+* Now days, the majority of the jobs are in office. One factor that people suffer is the inactivity during working hours, so a suggestion like "take a 5 minutes walk" could be beneficial to improve health and the lack of exercise.
+
+* A consideration for another in-app tool could be the calorie intakes in a day, for better feeding control and reduce obesity or maintain shape.   
